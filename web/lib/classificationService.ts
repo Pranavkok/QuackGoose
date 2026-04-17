@@ -37,6 +37,26 @@ function normalizeDomain(domain: string) {
   return domain.trim().toLowerCase().replace(/^www\./, '');
 }
 
+function normalizePolicyDomain(input: string) {
+  const trimmed = String(input || '').trim().toLowerCase();
+  if (!trimmed) return '';
+
+  const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
+  const withoutPath = withoutProtocol.split('/')[0] || '';
+  const withoutPort = withoutPath.split(':')[0] || '';
+  const withoutWildcard = withoutPort.replace(/^\*\./, '');
+  return withoutWildcard.replace(/^www\./, '');
+}
+
+function matchesDomainRule(domain: string, rule: string) {
+  if (!rule) return false;
+  return domain === rule || domain.endsWith(`.${rule}`);
+}
+
+function matchesAnyRule(domain: string, rules: string[]) {
+  return rules.some((rule) => matchesDomainRule(domain, rule));
+}
+
 function normalizeConfidence(value: unknown) {
   const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? '0'));
   if (!Number.isFinite(parsed)) return 0;
@@ -189,9 +209,63 @@ export async function classifyPage(userId: string, input: ScrapeInput): Promise<
     };
   }
 
-  const override = await prisma.userWebsiteOverride.findUnique({
-    where: { userId_domain: { userId, domain: normalizedDomain } },
-  });
+  const [orgMembership, override, profile] = await Promise.all([
+    prisma.orgMember.findFirst({
+      where: { userId },
+      select: {
+        org: {
+          select: {
+            policy: {
+              select: {
+                blockedDomains: true,
+                allowedDomains: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.userWebsiteOverride.findUnique({
+      where: { userId_domain: { userId, domain: normalizedDomain } },
+    }),
+    prisma.onboardingProfile.findUnique({
+      where: { userId },
+      select: {
+        productivityType: true,
+        alwaysProductiveDomains: true,
+        alwaysBlockedDomains: true,
+      },
+    }),
+  ]);
+
+  const orgPolicy = orgMembership?.org?.policy;
+  const orgBlockedDomains = (orgPolicy?.blockedDomains ?? [])
+    .map(normalizePolicyDomain)
+    .filter(Boolean);
+  const orgAllowedDomains = (orgPolicy?.allowedDomains ?? [])
+    .map(normalizePolicyDomain)
+    .filter(Boolean);
+
+  if (matchesAnyRule(normalizedDomain, orgBlockedDomains)) {
+    return {
+      category: SiteCategory.DISTRACTION,
+      subcategory: SiteSubcategory.OTHER,
+      confidence: 1,
+      cached: true,
+      reasoning: 'Matched organization blocked list',
+    };
+  }
+
+  if (matchesAnyRule(normalizedDomain, orgAllowedDomains)) {
+    return {
+      category: SiteCategory.PRODUCTIVE,
+      subcategory: SiteSubcategory.OTHER,
+      confidence: 1,
+      cached: true,
+      reasoning: 'Matched organization allowed list',
+    };
+  }
+
   if (override) {
     return {
       category: override.category,
@@ -201,15 +275,6 @@ export async function classifyPage(userId: string, input: ScrapeInput): Promise<
       reasoning: 'Matched user override',
     };
   }
-
-  const profile = await prisma.onboardingProfile.findUnique({
-    where: { userId },
-    select: {
-      productivityType: true,
-      alwaysProductiveDomains: true,
-      alwaysBlockedDomains: true,
-    },
-  });
 
   if (profile?.alwaysProductiveDomains.includes(normalizedDomain)) {
     return {

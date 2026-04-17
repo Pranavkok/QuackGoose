@@ -1,36 +1,68 @@
 const API_BASE = 'http://localhost:3000';
 
+function getRuntimeErrorMessage(defaultMessage) {
+  const raw = chrome.runtime.lastError;
+  const message = raw?.message ? String(raw.message) : '';
+  return message || defaultMessage;
+}
+
+function toError(message, detail) {
+  if (!detail) return new Error(message);
+  return new Error(`${message}: ${detail}`);
+}
+
 export async function signIn() {
-  return new Promise((resolve, reject) => {
-    chrome.identity.getAuthToken({ interactive: true }, async (token) => {
-      if (chrome.runtime.lastError || !token) {
-        reject(chrome.runtime.lastError || new Error('Missing Google auth token'));
+  await new Promise((resolve) => {
+    chrome.identity.clearAllCachedAuthTokens(() => resolve(undefined));
+  });
+
+  const googleAccessToken = await new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+      if (!token) {
+        reject(toError('Google sign-in failed', getRuntimeErrorMessage('Missing Google auth token')));
         return;
       }
-
-      try {
-        const res = await fetch(`${API_BASE}/api/auth/extension-token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ googleAccessToken: token }),
-        });
-
-        if (!res.ok) {
-          throw new Error(`Token exchange failed (${res.status})`);
-        }
-
-        const data = await res.json();
-        await chrome.storage.local.set({
-          qf_token: data.token,
-          qf_user: data.user,
-        });
-
-        resolve(data.user);
-      } catch (error) {
-        reject(error);
-      }
+      resolve(token);
     });
   });
+
+  return _exchangeToken({ googleAccessToken });
+}
+
+export async function signInWithEmail(email, password) {
+  return _exchangeToken({ email, password });
+}
+
+async function _exchangeToken(payload) {
+  const res = await fetch(`${API_BASE}/api/auth/extension-token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let detail = '';
+    try {
+      const json = await res.json();
+      detail = String(json?.error || '');
+    } catch {
+      try {
+        detail = await res.text();
+      } catch {
+        detail = '';
+      }
+    }
+
+    throw toError(`Token exchange failed (${res.status})`, detail);
+  }
+
+  const data = await res.json();
+  await chrome.storage.local.set({
+    qf_token: data.token,
+    qf_user: data.user,
+  });
+
+  return data.user;
 }
 
 export async function getAuthState() {

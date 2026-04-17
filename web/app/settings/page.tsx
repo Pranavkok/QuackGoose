@@ -16,75 +16,49 @@ type Settings = {
 };
 
 type OverrideCategory = 'PRODUCTIVE' | 'DISTRACTION' | 'NEUTRAL';
+type WebsiteOverride = { id: string; domain: string; category: OverrideCategory; createdAt: string };
 
-type WebsiteOverride = {
-  id: string;
-  domain: string;
-  category: OverrideCategory;
-  createdAt: string;
-};
+const ENFORCEMENT_OPTIONS: { value: Settings['enforcementLevel']; label: string; description: string; icon: string }[] = [
+  { value: 'WARN_ONLY',       label: 'Warn only',      description: 'Show a friendly warning',         icon: '💬' },
+  { value: 'BLUR',            label: 'Blur page',       description: 'Blur the site with a warning',    icon: '🌫️' },
+  { value: 'BLOCK',           label: 'Block',           description: 'Fully block access',              icon: '🚫' },
+  { value: 'SHAME_AND_BLOCK', label: 'Shame & Block',   description: 'Block with a shame message',      icon: '🫣' },
+];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [overrides, setOverrides] = useState<WebsiteOverride[]>([]);
-
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [overrideError, setOverrideError] = useState('');
-
   const [newDomain, setNewDomain] = useState('');
   const [newCategory, setNewCategory] = useState<OverrideCategory>('DISTRACTION');
   const [addingOverride, setAddingOverride] = useState(false);
 
-  async function loadPageData() {
+  async function load() {
     try {
-      setLoadError('');
-      const [settingsRes, overridesRes] = await Promise.all([
-        fetch('/api/settings'),
-        fetch('/api/settings/overrides'),
-      ]);
-
-      if (!settingsRes.ok) throw new Error('Failed to load settings');
-      if (!overridesRes.ok) throw new Error('Failed to load overrides');
-
-      const settingsData = (await settingsRes.json()) as Settings;
-      const overridesData = (await overridesRes.json()) as WebsiteOverride[];
-
-      setSettings(settingsData);
-      setOverrides(overridesData);
+      const [sr, or] = await Promise.all([fetch('/api/settings'), fetch('/api/settings/overrides')]);
+      if (!sr.ok || !or.ok) throw new Error();
+      setSettings((await sr.json()) as Settings);
+      setOverrides((await or.json()) as WebsiteOverride[]);
     } catch {
       setLoadError('Could not load settings. Refresh and try again.');
     }
   }
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      void loadPageData();
-    }, 0);
+  useEffect(() => { const t = setTimeout(() => void load(), 0); return () => clearTimeout(t); }, []);
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  async function saveSettings() {
+  async function save() {
     if (!settings) return;
-
     setSaving(true);
-    setLoadError('');
-
     try {
-      const res = await fetch('/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
-      });
-
-      if (!res.ok) throw new Error('Failed to save settings');
-
+      const res = await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
+      if (!res.ok) throw new Error();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch {
-      setLoadError('Failed to save settings. Try again.');
+      setLoadError('Failed to save. Try again.');
     } finally {
       setSaving(false);
     }
@@ -92,311 +66,272 @@ export default function SettingsPage() {
 
   async function addOverride() {
     if (!newDomain.trim()) return;
-
     setAddingOverride(true);
     setOverrideError('');
-
     try {
-      const res = await fetch('/api/settings/overrides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: newDomain, category: newCategory }),
-      });
-
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error || 'Could not add override');
-      }
-
+      const res = await fetch('/api/settings/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain: newDomain, category: newCategory }) });
+      if (!res.ok) { const b = (await res.json().catch(() => null)) as { error?: string } | null; throw new Error(b?.error ?? 'Could not add'); }
       setNewDomain('');
-      const updatedList = await fetch('/api/settings/overrides').then(r => r.json()) as WebsiteOverride[];
-      setOverrides(updatedList);
-    } catch (error) {
-      setOverrideError(error instanceof Error ? error.message : 'Could not add override');
+      setOverrides((await fetch('/api/settings/overrides').then(r => r.json())) as WebsiteOverride[]);
+    } catch (e) {
+      setOverrideError(e instanceof Error ? e.message : 'Could not add override');
     } finally {
       setAddingOverride(false);
     }
   }
 
   async function deleteOverride(domain: string) {
-    setOverrideError('');
-
     try {
-      const res = await fetch('/api/settings/overrides', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain }),
-      });
-
-      if (!res.ok) throw new Error('Could not delete override');
-      setOverrides(prev => prev.filter(override => override.domain !== domain));
+      await fetch('/api/settings/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain }) });
+      setOverrides(prev => prev.filter(o => o.domain !== domain));
     } catch {
-      setOverrideError('Could not delete override. Try again.');
+      setOverrideError('Could not delete. Try again.');
     }
   }
 
-  function update<K extends keyof Settings>(key: K, value: Settings[K]) {
-    setSettings(prev => (prev ? { ...prev, [key]: value } : prev));
+  function upd<K extends keyof Settings>(key: K, value: Settings[K]) {
+    setSettings(prev => prev ? { ...prev, [key]: value } : prev);
   }
 
   if (!settings) {
     return (
-      <div className="max-w-3xl space-y-6">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-44 w-full" />
-        <Skeleton className="h-44 w-full" />
-        <Skeleton className="h-52 w-full" />
+      <div className="mx-auto max-w-3xl space-y-5">
+        <Skeleton className="h-8 w-36" />
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-48" />)}
         {loadError && <p className="text-sm text-red-500">{loadError}</p>}
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+    <div className="mx-auto max-w-3xl space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50"
+        >
+          {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save changes'}
+        </button>
+      </div>
 
-      <Section title="Focus Goals">
-        <Field label="Daily focus goal">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={1}
-              max={12}
-              step={0.5}
-              value={settings.dailyFocusGoalMinutes / 60}
-              onChange={event => {
-                const nextHours = parseFloat(event.target.value);
-                if (!Number.isFinite(nextHours)) return;
-                update('dailyFocusGoalMinutes', Math.round(nextHours * 60));
-              }}
-              className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-center focus:outline-none focus:ring-2 focus:ring-black"
-            />
-            <span className="text-sm text-gray-500">hours per day</span>
-          </div>
-        </Field>
-        <Field label="Work hours">
-          <div className="flex items-center gap-3">
-            <input
-              type="time"
-              value={settings.workStartTime}
-              onChange={event => update('workStartTime', event.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-            />
-            <span className="text-gray-400">to</span>
-            <input
-              type="time"
-              value={settings.workEndTime}
-              onChange={event => update('workEndTime', event.target.value)}
-              className="border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-            />
-          </div>
-        </Field>
-      </Section>
+      {loadError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{loadError}</p>}
 
-      <Section title="Distraction Limits">
-        <Field label="Limit type">
-          <select
-            value={settings.distractionLimitMode}
-            onChange={event => update('distractionLimitMode', event.target.value as Settings['distractionLimitMode'])}
-            className="border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-          >
-            <option value="TIME_BASED">Time-based (X minutes/day)</option>
-            <option value="GOAL_BASED">Goal-based (no distraction until focus goal met)</option>
-          </select>
-        </Field>
-
-        {settings.distractionLimitMode === 'TIME_BASED' && (
-          <Field label="Daily distraction budget">
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={5}
-                max={480}
-                step={5}
-                value={settings.distractionLimitMinutes}
-                onChange={event => {
-                  const nextMinutes = parseInt(event.target.value, 10);
-                  if (!Number.isFinite(nextMinutes)) return;
-                  update('distractionLimitMinutes', nextMinutes);
-                }}
-                className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-center focus:outline-none focus:ring-2 focus:ring-black"
-              />
-              <span className="text-sm text-gray-500">minutes</span>
+      {/* Focus Goals */}
+      <Card title="Focus Goals" desc="Set your daily targets and work schedule.">
+        <div className="space-y-6">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-semibold text-gray-700">Daily focus goal</label>
+              <span className="text-sm font-bold text-blue-600">
+                {Math.floor(settings.dailyFocusGoalMinutes / 60)}h {settings.dailyFocusGoalMinutes % 60}m
+              </span>
             </div>
-          </Field>
-        )}
-      </Section>
+            <input
+              type="range" min={60} max={720} step={30}
+              value={settings.dailyFocusGoalMinutes}
+              onChange={e => upd('dailyFocusGoalMinutes', Number(e.target.value))}
+              className="w-full accent-blue-600"
+            />
+            <div className="mt-1 flex justify-between text-xs text-gray-400"><span>1h</span><span>12h</span></div>
+          </div>
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">Work hours</label>
+            <div className="flex items-center gap-3">
+              <input type="time" value={settings.workStartTime} onChange={e => upd('workStartTime', e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" />
+              <span className="text-gray-400 font-medium">→</span>
+              <input type="time" value={settings.workEndTime} onChange={e => upd('workEndTime', e.target.value)}
+                className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15" />
+            </div>
+          </div>
+        </div>
+      </Card>
 
-      <Section title="Duck Enforcement">
-        <Field label="When limit is reached">
-          <select
-            value={settings.enforcementLevel}
-            onChange={event => update('enforcementLevel', event.target.value as Settings['enforcementLevel'])}
-            className="border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
-          >
-            <option value="WARN_ONLY">Warn only</option>
-            <option value="BLUR">Blur page</option>
-            <option value="BLOCK">Blur + cursor block</option>
-            <option value="SHAME_AND_BLOCK">Shame and block</option>
-          </select>
-        </Field>
-        <Field label="Duck overlay">
+      {/* Distraction Limits */}
+      <Card title="Distraction Limits" desc="Control how much time you allow for non-work browsing.">
+        <div className="space-y-5">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">Limit type</label>
+            <select
+              value={settings.distractionLimitMode}
+              onChange={e => upd('distractionLimitMode', e.target.value as Settings['distractionLimitMode'])}
+              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
+            >
+              <option value="TIME_BASED">Time-based (X minutes/day)</option>
+              <option value="GOAL_BASED">Goal-based (no distraction until focus goal met)</option>
+            </select>
+          </div>
+          {settings.distractionLimitMode === 'TIME_BASED' && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-semibold text-gray-700">Daily distraction budget</label>
+                <span className="text-sm font-bold text-red-500">{settings.distractionLimitMinutes}m</span>
+              </div>
+              <input
+                type="range" min={15} max={240} step={15}
+                value={settings.distractionLimitMinutes}
+                onChange={e => upd('distractionLimitMinutes', Number(e.target.value))}
+                className="w-full accent-red-500"
+              />
+              <div className="mt-1 flex justify-between text-xs text-gray-400"><span>15m</span><span>4h</span></div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Enforcement */}
+      <Card title="Duck Enforcement" desc="Choose how the duck handles your distraction limit.">
+        <div className="grid grid-cols-2 gap-3">
+          {ENFORCEMENT_OPTIONS.map(opt => (
+            <label
+              key={opt.value}
+              className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-all ${
+                settings.enforcementLevel === opt.value
+                  ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <input
+                type="radio" name="enforcement" value={opt.value}
+                checked={settings.enforcementLevel === opt.value}
+                onChange={() => upd('enforcementLevel', opt.value)}
+                className="mt-0.5 accent-blue-600"
+              />
+              <div>
+                <p className="text-sm font-bold text-gray-900">{opt.icon} {opt.label}</p>
+                <p className="mt-0.5 text-xs text-gray-500">{opt.description}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        <div className="mt-5 space-y-3 border-t border-gray-100 pt-5">
           <Toggle
             checked={settings.duckEnabled}
-            onChange={value => update('duckEnabled', value)}
-            label="Show duck on all pages"
+            onChange={v => upd('duckEnabled', v)}
+            label="Show duck overlay on all pages"
           />
-        </Field>
-        <Field label="Duck messages">
           <Toggle
             checked={settings.duckMessagesEnabled}
-            onChange={value => update('duckMessagesEnabled', value)}
+            onChange={v => upd('duckMessagesEnabled', v)}
             label="Show duck messages and roasts"
           />
-        </Field>
-      </Section>
+        </div>
+      </Card>
 
-      <Section title="Notifications">
-        <Field label="Weekly summary email">
-          <Toggle
-            checked={settings.weeklyEmailEnabled}
-            onChange={value => update('weeklyEmailEnabled', value)}
-            label="Send weekly garden summary"
-          />
-        </Field>
-      </Section>
+      {/* Notifications */}
+      <Card title="Notifications" desc="Control how QuackFocus communicates with you.">
+        <Toggle
+          checked={settings.weeklyEmailEnabled}
+          onChange={v => upd('weeklyEmailEnabled', v)}
+          label="Send weekly garden & productivity summary email"
+        />
+      </Card>
 
-      <Section title="Website Overrides">
+      {/* Website Overrides */}
+      <Card title="Website Overrides" desc="Force a site to be classified as productive, distraction, or neutral.">
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Force a site to be classified as productive, distraction, or neutral.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3">
+          <div className="flex gap-2">
             <input
-              value={newDomain}
-              onChange={event => setNewDomain(event.target.value)}
+              value={newDomain} onChange={e => setNewDomain(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && void addOverride()}
               placeholder="example.com"
-              className="border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
+              className="flex-1 rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
             />
-
             <select
-              value={newCategory}
-              onChange={event => setNewCategory(event.target.value as OverrideCategory)}
-              className="border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
+              value={newCategory} onChange={e => setNewCategory(e.target.value as OverrideCategory)}
+              className="rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
             >
               <option value="PRODUCTIVE">Productive</option>
               <option value="DISTRACTION">Distraction</option>
               <option value="NEUTRAL">Neutral</option>
             </select>
-
             <button
-              type="button"
-              onClick={addOverride}
+              onClick={() => void addOverride()}
               disabled={addingOverride || !newDomain.trim()}
-              className="px-4 py-2 bg-black text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-50"
+              className="rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50 transition-colors"
             >
-              {addingOverride ? 'Adding...' : 'Add'}
+              {addingOverride ? '…' : 'Add'}
             </button>
           </div>
 
-          {overrideError && <p className="text-sm text-red-500">{overrideError}</p>}
+          {overrideError && <p className="text-sm text-red-600">{overrideError}</p>}
 
           {overrides.length === 0 ? (
-            <p className="text-sm text-gray-500">No custom overrides yet.</p>
+            <p className="text-sm text-gray-400">No custom overrides yet.</p>
           ) : (
-            <div className="border border-gray-100 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-gray-600">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">Domain</th>
-                    <th className="px-3 py-2 text-left font-medium">Category</th>
-                    <th className="px-3 py-2 text-right font-medium">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overrides.map(override => (
-                    <tr key={override.id} className="border-t border-gray-100">
-                      <td className="px-3 py-2 text-gray-700">{override.domain}</td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${categoryStyles[override.category]}`}>
-                          {override.category}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          type="button"
-                          onClick={() => deleteOverride(override.domain)}
-                          className="text-red-600 hover:text-red-800 font-medium"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="overflow-hidden rounded-xl border border-gray-100">
+              {overrides.map((o, i) => (
+                <div
+                  key={o.id}
+                  className={`flex items-center justify-between px-4 py-3 ${i !== 0 ? 'border-t border-gray-50' : ''} hover:bg-gray-50/60 transition-colors`}
+                >
+                  <span className="text-sm font-medium text-gray-700">{o.domain}</span>
+                  <div className="flex items-center gap-3">
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                      o.category === 'PRODUCTIVE' ? 'bg-green-50 text-green-700'
+                      : o.category === 'DISTRACTION' ? 'bg-red-50 text-red-700'
+                      : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {o.category.toLowerCase()}
+                    </span>
+                    <button
+                      onClick={() => void deleteOverride(o.domain)}
+                      className="text-sm font-semibold text-red-500 hover:text-red-700 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-      </Section>
+      </Card>
 
-      <div className="flex items-center gap-3">
+      {/* Bottom save */}
+      <div className="flex items-center justify-end gap-3 pb-4">
+        {saved && <span className="text-sm font-semibold text-green-600">✓ Settings saved</span>}
         <button
-          onClick={saveSettings}
+          onClick={save}
           disabled={saving}
-          className="px-6 py-2 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          className="rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-sm hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 transition-all"
         >
-          {saving ? 'Saving...' : 'Save changes'}
+          {saving ? 'Saving…' : 'Save changes'}
         </button>
-        {saved && <span className="text-sm text-green-600">Saved</span>}
-        {loadError && <span className="text-sm text-red-500">{loadError}</span>}
       </div>
     </div>
   );
 }
 
-const categoryStyles: Record<OverrideCategory, string> = {
-  PRODUCTIVE: 'bg-green-50 text-green-700',
-  DISTRACTION: 'bg-red-50 text-red-700',
-  NEUTRAL: 'bg-gray-100 text-gray-700',
-};
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-800">{title}</h2>
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-6 py-5">
+        <h2 className="font-bold text-gray-900">{title}</h2>
+        <p className="mt-0.5 text-sm text-gray-500">{desc}</p>
       </div>
-      <div className="px-6 py-5 space-y-5">{children}</div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <label className="text-sm font-medium text-gray-700 shrink-0 w-44">{label}</label>
-      <div>{children}</div>
+      <div className="px-6 py-5">{children}</div>
     </div>
   );
 }
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer">
+    <label className="flex cursor-pointer items-center gap-3">
       <button
         type="button"
         onClick={() => onChange(!checked)}
-        className={`relative w-10 h-6 rounded-full transition-colors ${checked ? 'bg-black' : 'bg-gray-200'}`}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gray-200'}`}
       >
         <span
-          className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-            checked ? 'translate-x-5' : 'translate-x-1'
-          }`}
+          className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? 'translate-x-6' : 'translate-x-1'}`}
         />
       </button>
-      <span className="text-sm text-gray-600">{label}</span>
+      <span className="text-sm text-gray-700">{label}</span>
     </label>
   );
 }

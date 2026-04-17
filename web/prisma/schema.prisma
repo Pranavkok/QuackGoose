@@ -65,6 +65,31 @@ enum DuckMood {
   DISAPPOINTED
 }
 
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum PlanTier {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum OrgInviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
 enum PlantType {
   SMALL_FLOWER
   MEDIUM_FLOWER
@@ -126,20 +151,104 @@ model User {
   emailVerified       DateTime?
   name                String?
   image               String?
+  password            String?
   onboardingCompleted Boolean   @default(false)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  accounts            Account[]
-  sessions            Session[]
-  onboardingProfile   OnboardingProfile?
-  settings            UserSettings?
-  activityLogs        ActivityLog[]
-  dailySummaries      DailySummary[]
-  garden              Garden?
-  websiteOverrides    UserWebsiteOverride[]
+  accounts                 Account[]
+  sessions                 Session[]
+  onboardingProfile        OnboardingProfile?
+  settings                 UserSettings?
+  activityLogs             ActivityLog[]
+  dailySummaries           DailySummary[]
+  garden                   Garden?
+  websiteOverrides         UserWebsiteOverride[]
+  orgMemberships           OrgMember[]
+  focusRoomsCreated        FocusRoom[]           @relation("RoomCreator")
+  focusRoomMemberships     FocusRoomMember[]
 
   @@index([email])
+}
+
+// ─── ORGANIZATION ─────────────────────────────────────────────────────────────
+
+model Organization {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  logoUrl      String?
+  industry     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  members      OrgMember[]
+  policy       OrgPolicy?
+  subscription Subscription?
+  invites      OrgInvite[]
+}
+
+model OrgMember {
+  id       String       @id @default(cuid())
+  orgId    String
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     OrgRole      @default(MEMBER)
+  joinedAt DateTime     @default(now())
+
+  @@unique([orgId, userId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+model OrgPolicy {
+  id                      String           @id @default(cuid())
+  orgId                   String           @unique
+  org                     Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  blockedDomains          String[]         @default([])
+  allowedDomains          String[]         @default([])
+  enforcementLevel        EnforcementLevel @default(BLUR)
+  workStartTime           String           @default("09:00")
+  workEndTime             String           @default("18:00")
+  dailyFocusGoalMinutes   Int              @default(240)
+  distractionLimitMinutes Int              @default(60)
+
+  updatedAt               DateTime         @updatedAt
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  orgId              String             @unique
+  org                Organization       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  plan               PlanTier           @default(STARTER)
+  status             SubscriptionStatus @default(TRIAL)
+  seatsAllowed       Int                @default(20)
+  seatsUsed          Int                @default(0)
+
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+model OrgInvite {
+  id        String          @id @default(cuid())
+  orgId     String
+  org       Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  email     String
+  role      OrgRole         @default(MEMBER)
+  token     String          @unique @default(cuid())
+  status    OrgInviteStatus @default(PENDING)
+  expiresAt DateTime
+  createdAt DateTime        @default(now())
+
+  @@index([orgId])
+  @@index([token])
 }
 
 // ─── ONBOARDING ──────────────────────────────────────────────────────────────
@@ -298,4 +407,46 @@ model GardenPlant {
   sourceDate DateTime
 
   @@index([gardenId, status])
+}
+
+// ─── FOCUS ROOMS ──────────────────────────────────────────────────────────────
+
+enum FocusRoomStatus {
+  WAITING
+  ACTIVE
+  ENDED
+}
+
+model FocusRoom {
+  id           String          @id @default(cuid())
+  code         String          @unique
+  name         String          @default("Focus Session")
+  creatorId    String
+  creator      User            @relation("RoomCreator", fields: [creatorId], references: [id])
+  durationMin  Int             @default(25)
+  allowedSites String[]        @default([])
+  status       FocusRoomStatus @default(WAITING)
+  startedAt    DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime        @default(now())
+
+  members      FocusRoomMember[]
+
+  @@index([code])
+  @@index([creatorId])
+}
+
+model FocusRoomMember {
+  id           String    @id @default(cuid())
+  roomId       String
+  room         FocusRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  isDistracted Boolean   @default(false)
+  distractedSite String?
+  lastSeen     DateTime  @default(now())
+  joinedAt     DateTime  @default(now())
+
+  @@unique([roomId, userId])
+  @@index([roomId])
 }

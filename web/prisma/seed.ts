@@ -7,7 +7,32 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const USER_ID = 'cmo38lirp0000l9urkpzqqkr2';
+const DEFAULT_SEED_EMAIL = 'pranavkokoff@gmail.com';
+
+function parseSeedEmail() {
+  const cliArg = process.argv.find((arg) => arg.startsWith('--email='));
+  const argValue = cliArg ? cliArg.split('=').slice(1).join('=') : '';
+  const value = (process.env.SEED_EMAIL || argValue || DEFAULT_SEED_EMAIL).trim().toLowerCase();
+  return value;
+}
+
+function nameFromEmail(email: string) {
+  const username = email.split('@')[0] || 'QuackFocus User';
+  return username.replace(/[._-]+/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+async function getOrCreateUserByEmail(email: string) {
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) return existing;
+
+  return prisma.user.create({
+    data: {
+      email,
+      name: nameFromEmail(email),
+      onboardingCompleted: true,
+    },
+  });
+}
 
 // Today at midnight UTC
 function dayUTC(offsetDays = 0): Date {
@@ -24,19 +49,23 @@ function time(h: number, m: number, offsetDays = 0): Date {
 }
 
 async function main() {
-  console.log('Seeding for user:', USER_ID);
+  const targetEmail = parseSeedEmail();
+  const targetUser = await getOrCreateUserByEmail(targetEmail);
+  const userId = targetUser.id;
+
+  console.log(`Seeding for user: ${userId} (${targetEmail})`);
 
   // 1. Mark onboarding complete + create profile + settings
   await prisma.user.update({
-    where: { id: USER_ID },
+    where: { id: userId },
     data: { onboardingCompleted: true },
   });
 
   await prisma.onboardingProfile.upsert({
-    where: { userId: USER_ID },
+    where: { userId },
     update: {},
     create: {
-      userId: USER_ID,
+      userId,
       productivityType: 'DEVELOPER',
       distractionTypes: ['social_media', 'video'],
       strictnessLevel: 4,
@@ -52,10 +81,10 @@ async function main() {
   });
 
   await prisma.userSettings.upsert({
-    where: { userId: USER_ID },
+    where: { userId },
     update: {},
     create: {
-      userId: USER_ID,
+      userId,
       distractionLimitMode: 'TIME_BASED',
       distractionLimitMinutes: 60,
       dailyFocusGoalMinutes: 240,
@@ -69,7 +98,21 @@ async function main() {
   });
 
   // 2. Today's activity logs (5-hour session, 10am–3pm)
-  const todayLogs = [
+  const todayLogs: Array<{
+    domain: string;
+    title: string;
+    cat: 'PRODUCTIVE' | 'DISTRACTION' | 'NEUTRAL';
+    sub:
+      | 'CODING'
+      | 'DOCUMENTATION'
+      | 'RESEARCH'
+      | 'VIDEO_ENTERTAINMENT'
+      | 'SOCIAL_MEDIA'
+      | 'PRODUCTIVITY_TOOL';
+    start: Date;
+    end: Date;
+    dur: number;
+  }> = [
     // --- Productive stretch 10:00–11:30 (90 min) ---
     { domain: 'github.com',        title: 'QuackFocus / QuackGoose — Pull requests',       cat: 'PRODUCTIVE', sub: 'CODING',         start: time(10,0),  end: time(10,28), dur: 28*60 },
     { domain: 'github.com',        title: 'QuackFocus / web — Commits',                    cat: 'PRODUCTIVE', sub: 'CODING',         start: time(10,28), end: time(10,55), dur: 27*60 },
@@ -96,14 +139,14 @@ async function main() {
     { domain: 'stackoverflow.com', title: 'Prisma upsert with relations — Stack Overflow', cat: 'PRODUCTIVE', sub: 'RESEARCH',       start: time(14,50), end: time(15,0),  dur: 10*60 },
   ];
 
-  await prisma.activityLog.deleteMany({ where: { userId: USER_ID, date: dayUTC(0) } });
+  await prisma.activityLog.deleteMany({ where: { userId, date: dayUTC(0) } });
   await prisma.activityLog.createMany({
     data: todayLogs.map(l => ({
-      userId:          USER_ID,
+      userId,
       domain:          l.domain,
       pageTitle:       l.title,
-      category:        l.cat as any,
-      subcategory:     l.sub as any,
+      category:        l.cat,
+      subcategory:     l.sub,
       isProductive:    l.cat === 'PRODUCTIVE',
       startedAt:       l.start,
       endedAt:         l.end,
@@ -116,7 +159,7 @@ async function main() {
   // 3. DailySummary for today
   // productive: 90+90+60 = 240 min, distraction: 30+30 = 60 min
   await prisma.dailySummary.upsert({
-    where: { userId_date: { userId: USER_ID, date: dayUTC(0) } },
+    where: { userId_date: { userId, date: dayUTC(0) } },
     update: {
       totalFocusMinutes:       240,
       totalDistractionMinutes: 60,
@@ -130,7 +173,7 @@ async function main() {
       focusStreak:             8,
     },
     create: {
-      userId:                  USER_ID,
+      userId,
       date:                    dayUTC(0),
       totalFocusMinutes:       240,
       totalDistractionMinutes: 60,
@@ -159,10 +202,10 @@ async function main() {
 
   for (const d of pastDays) {
     await prisma.dailySummary.upsert({
-      where: { userId_date: { userId: USER_ID, date: dayUTC(d.offset) } },
+      where: { userId_date: { userId, date: dayUTC(d.offset) } },
       update: {},
       create: {
-        userId:                  USER_ID,
+        userId,
         date:                    dayUTC(d.offset),
         totalFocusMinutes:       d.focus,
         totalDistractionMinutes: d.dist,
@@ -181,9 +224,9 @@ async function main() {
 
   // 5. Garden + plants
   const garden = await prisma.garden.upsert({
-    where: { userId: USER_ID },
+    where: { userId },
     update: { totalPlants: 26, alivePlants: 26 },
-    create: { userId: USER_ID, totalPlants: 26, alivePlants: 26 },
+    create: { userId, totalPlants: 26, alivePlants: 26 },
   });
 
   await prisma.gardenPlant.deleteMany({ where: { gardenId: garden.id } });

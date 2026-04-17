@@ -1,4 +1,4 @@
-import { getAuthState, signIn, signOut } from './auth.js';
+import { getAuthState, signIn, signInWithEmail, signOut } from './auth.js';
 
 const WEB_BASE = 'http://localhost:3000';
 
@@ -63,6 +63,14 @@ function sendMessage(message) {
   });
 }
 
+function buildSessionBridgeUrl(path, token) {
+  if (!token) return `${WEB_BASE}${path}`;
+  const url = new URL('/api/auth/extension-bridge', WEB_BASE);
+  url.searchParams.set('token', token);
+  url.searchParams.set('next', path);
+  return url.toString();
+}
+
 async function fetchEffectiveStatus() {
   try {
     const response = await sendMessage({ type: 'GET_EFFECTIVE_STATUS' });
@@ -86,11 +94,11 @@ async function fetchEffectiveStatus() {
   };
 }
 
-function bindCommonActions() {
+function bindCommonActions(token) {
   const openDashboardBtn = document.getElementById('open-dashboard');
   if (openDashboardBtn) {
     openDashboardBtn.addEventListener('click', () => {
-      chrome.tabs.create({ url: `${WEB_BASE}/dashboard` });
+      chrome.tabs.create({ url: buildSessionBridgeUrl('/dashboard', token) });
       window.close();
     });
   }
@@ -110,7 +118,7 @@ async function render() {
 
   root.innerHTML = '<div class="muted">Loading...</div>';
 
-  const { user } = await getAuthState();
+  const { user, token } = await getAuthState();
 
   if (!user) {
     root.innerHTML = `
@@ -118,22 +126,53 @@ async function render() {
         <div class="header">
           <h1 class="brand">🦆 QuackFocus</h1>
         </div>
-        <p class="line">Sign in to sync extension tracking with your dashboard.</p>
+        <p class="line">Sign in to sync tracking with your dashboard.</p>
         <div class="single-action">
-          <button id="sign-in" class="btn">Sign in with Google</button>
+          <button id="sign-in-google" class="btn">Sign in with Google</button>
         </div>
+        <div class="divider"><span>or</span></div>
+        <form id="email-form" class="stack" style="gap:8px">
+          <input id="email-input" type="email" placeholder="you@company.com" class="input" required />
+          <input id="password-input" type="password" placeholder="Password" class="input" required />
+          <p id="email-error" class="error" style="display:none"></p>
+          <button type="submit" class="btn">Sign in with Email</button>
+        </form>
+        <p class="muted" style="text-align:center;font-size:11px">
+          Don't have an account? <a href="${WEB_BASE}/signup" target="_blank" rel="noreferrer" class="link-inline">Sign up</a>
+        </p>
       </div>
     `;
 
-    const signInBtn = document.getElementById('sign-in');
-    if (signInBtn) {
-      signInBtn.addEventListener('click', async () => {
+    const googleBtn = document.getElementById('sign-in-google');
+    if (googleBtn) {
+      googleBtn.addEventListener('click', async () => {
         try {
           await signIn();
           await render();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           alert(`Sign-in failed: ${message}`);
+        }
+      });
+    }
+
+    const emailForm = document.getElementById('email-form');
+    if (emailForm) {
+      emailForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email-input')?.value?.trim() || '';
+        const password = document.getElementById('password-input')?.value || '';
+        const errorEl = document.getElementById('email-error');
+        if (errorEl) errorEl.style.display = 'none';
+        try {
+          await signInWithEmail(email, password);
+          await render();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (errorEl) {
+            errorEl.textContent = message.includes('401') ? 'Invalid email or password.' : message;
+            errorEl.style.display = 'block';
+          }
         }
       });
     }
@@ -149,12 +188,12 @@ async function render() {
         </div>
         <p class="line">Welcome, ${escapeHtml(user.name || 'there')}.</p>
         <p class="line">Complete onboarding to enable focus enforcement.</p>
-        <a class="link" href="${WEB_BASE}/onboarding" target="_blank" rel="noreferrer">
+        <a class="link" href="${buildSessionBridgeUrl('/onboarding', token)}" target="_blank" rel="noreferrer">
           Open Onboarding
         </a>
       </div>
     `;
-    bindCommonActions();
+    bindCommonActions(token);
     return;
   }
 
@@ -221,7 +260,7 @@ async function render() {
     </div>
   `;
 
-  bindCommonActions();
+  bindCommonActions(token);
 
   const pauseBtn = document.getElementById('pause-toggle');
   if (pauseBtn) {

@@ -52,6 +52,30 @@ function normalizeHost(hostname) {
   return String(hostname || '').trim().toLowerCase().replace(/^www\./, '');
 }
 
+function normalizeDomainRule(value) {
+  const trimmed = String(value || '').trim().toLowerCase();
+  if (!trimmed) return '';
+  const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
+  const withoutPath = withoutProtocol.split('/')[0] || '';
+  const withoutPort = withoutPath.split(':')[0] || '';
+  const withoutWildcard = withoutPort.replace(/^\*\./, '');
+  return withoutWildcard.replace(/^www\./, '');
+}
+
+function isDomainMatch(hostname, rule) {
+  if (!rule) return false;
+  return hostname === rule || hostname.endsWith(`.${rule}`);
+}
+
+function isHardBlockedDomain(hostname, rules) {
+  const normalizedHost = normalizeHost(hostname);
+  if (!normalizedHost || !Array.isArray(rules)) return false;
+  return rules
+    .map(normalizeDomainRule)
+    .filter(Boolean)
+    .some((rule) => isDomainMatch(normalizedHost, rule));
+}
+
 function applyBlur(level) {
   const filters = {
     0: '',
@@ -146,10 +170,7 @@ function getDuckMessage(mood) {
 function getCompanionMessage(reason) {
   const status = pageState.status || {};
   const category = pageState.classification?.category;
-
-  if (status.outsideActiveTimeWindow) {
-    return 'Outside work hours. I am still here with you.';
-  }
+  const outsideWorkHours = Boolean(status.outsideActiveTimeWindow);
 
   if (status.isPaused) {
     return 'Pause is active. I will guide you again once it ends.';
@@ -161,15 +182,42 @@ function getCompanionMessage(reason) {
     if (category === 'NEUTRAL') return 'Neutral page. Keep your intent clear.';
   }
 
-  if (currentMood === 'HAPPY') return 'Strong focus. Keep this momentum.';
-  if (currentMood === 'PROUD') return 'Goal completed. You earned this win.';
-  if (currentMood === 'WARNING') return 'You are drifting. Shift to a productive tab.';
-  if (currentMood === 'ANGRY') return 'Distraction is too high. Time to correct course.';
-  if (currentMood === 'CHAOS') return 'Limit reached. Back to work mode now.';
-  if (currentMood === 'WATCHING') return 'I am here. Let us stay intentional.';
-  if (currentMood === 'IDLE') return "I'm here with you. Let's focus.";
+  let baseMessage = '';
+  if (currentMood === 'HAPPY') baseMessage = 'Strong focus. Keep this momentum.';
+  else if (currentMood === 'PROUD') baseMessage = 'Goal completed. You earned this win.';
+  else if (currentMood === 'WARNING') baseMessage = 'You are drifting. Shift to a productive tab.';
+  else if (currentMood === 'ANGRY') baseMessage = 'Distraction detected. Time to correct course.';
+  else if (currentMood === 'CHAOS') baseMessage = 'Limit reached. Back to work mode now.';
+  else if (currentMood === 'WATCHING') baseMessage = 'I am here. Let us stay intentional.';
+  else if (currentMood === 'IDLE') baseMessage = "I'm here with you. Let's focus.";
+  else baseMessage = getDuckMessage(currentMood);
 
-  return getDuckMessage(currentMood);
+  if (outsideWorkHours) {
+    return `${baseMessage} (Outside work hours: enforcement is off.)`;
+  }
+
+  return baseMessage;
+}
+
+function resolveMoodFromContext() {
+  const status = pageState.status || {};
+  const category = String(pageState.classification?.category || '').toUpperCase();
+  const distractionPct = computeDistractionPercent(status);
+
+  if (status.isPaused) return 'IDLE';
+  if (category === 'PRODUCTIVE') return 'HAPPY';
+  if (category === 'DISTRACTION') {
+    if (status.limitReached) return 'CHAOS';
+    if (distractionPct >= 80) return 'ANGRY';
+    return 'ANGRY';
+  }
+  if (category === 'NEUTRAL') return 'WATCHING';
+
+  return String(status.duckMood || 'WATCHING').toUpperCase();
+}
+
+function syncDuckMoodFromContext() {
+  updateDuckMood(resolveMoodFromContext());
 }
 
 function showDuckTooltip(message, durationMs = TOOLTIP_AUTO_HIDE_MS) {
@@ -253,6 +301,32 @@ function updateDuckMood(mood) {
 }
 
 async function handleStateUpdate(data) {
+  if (data?.isPaused || data?.outsideActiveTimeWindow) {
+    enforcementActive = false;
+    applyBlur(0);
+    removeBlockOverlay();
+    return;
+  }
+
+  const mode = data?.enforceMode || 'BLUR';
+  const isBlockedByPolicy = isHardBlockedDomain(window.location.hostname, data?.blockedDomains);
+  if (isBlockedByPolicy) {
+    enforcementActive = true;
+
+    if (mode === 'WARN_ONLY') {
+      applyBlur(1);
+      removeBlockOverlay();
+      return;
+    }
+
+    applyBlur(3);
+    injectBlockOverlay(
+      'This site is blocked by your organization policy.',
+      data?.duckMood || 'CHAOS',
+    );
+    return;
+  }
+
   const isDistractionSite = await isCurrentPageDistraction();
   if (!isDistractionSite) {
     enforcementActive = false;
@@ -262,7 +336,6 @@ async function handleStateUpdate(data) {
   }
 
   const pct = computeDistractionPercent(data);
-  const mode = data?.enforceMode || 'BLUR';
   const reached = Boolean(data?.limitReached);
 
   if (!reached && pct < 50) {
@@ -332,13 +405,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   if (msg.type === 'PAGE_CLASSIFIED') {
     pageState.classification = msg.payload || null;
-    const category = msg.payload?.category;
-    const paused = Boolean(msg.payload?.paused || pageState.status?.isPaused || pageState.status?.outsideActiveTimeWindow);
-    if (paused) {
-      updateDuckMood('IDLE');
-    } else {
-      updateDuckMood(category === 'DISTRACTION' ? 'WARNING' : 'WATCHING');
-    }
+    syncDuckMoodFromContext();
     maybeSpeak('classified');
     window.dispatchEvent(new CustomEvent('qf:page_classified', { detail: pageState.classification }));
     return;
@@ -347,9 +414,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'STATE_UPDATE') {
     pageState.status = msg.payload || null;
     void handleStateUpdate(msg.payload || {});
-    if (msg.payload?.duckMood) {
-      updateDuckMood(msg.payload.duckMood);
-    }
+    syncDuckMoodFromContext();
     maybeSpeak('status_update');
     window.dispatchEvent(new CustomEvent('qf:state_update', { detail: pageState.status }));
     return;
