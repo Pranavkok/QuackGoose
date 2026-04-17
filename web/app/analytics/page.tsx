@@ -11,6 +11,7 @@ import {
   LineChart,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -165,6 +166,23 @@ export default function AnalyticsPage() {
     [data],
   );
 
+  const distractionOverPeriodData = useMemo(
+    () =>
+      (data?.summaries || []).map((item) => {
+        return {
+          date: shortDateLabel(item.date),
+          distractionMinutes: item.totalDistractionMinutes,
+        };
+      }),
+    [data],
+  );
+
+  const averageDistractionMinutes = useMemo(() => {
+    if (!distractionOverPeriodData.length) return 0;
+    const total = distractionOverPeriodData.reduce((sum, item) => sum + item.distractionMinutes, 0);
+    return Number((total / distractionOverPeriodData.length).toFixed(1));
+  }, [distractionOverPeriodData]);
+
   const weeklyHeatmapData = useMemo(() => {
     const source = data?.summaries || [];
     const byDate = new Map(source.map((item) => [item.date.slice(0, 10), item.productivityScore]));
@@ -245,6 +263,7 @@ export default function AnalyticsPage() {
           </div>
           <Skeleton className="h-16 w-80" />
         </div>
+        <Skeleton className="h-80 w-full" />
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <Skeleton className="h-80 w-full" />
           <Skeleton className="h-80 w-full" />
@@ -337,6 +356,33 @@ export default function AnalyticsPage() {
       </div>
 
       {error && <p className="text-sm text-amber-700">Background refresh failed: {error}</p>}
+
+      <ChartCard title="User Distraction Over Period">
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={distractionOverPeriodData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <ReferenceLine
+              y={averageDistractionMinutes}
+              stroke={PALETTE.warning}
+              strokeDasharray="6 6"
+              ifOverflow="extendDomain"
+              label={{ value: `Avg ${averageDistractionMinutes}m`, position: 'insideTopRight' }}
+            />
+            <Line
+              type="monotone"
+              dataKey="distractionMinutes"
+              stroke={PALETTE.distraction}
+              strokeWidth={2}
+              dot={false}
+              name="Distraction (min)"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartCard>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <ChartCard title="Daily Focus vs Distraction (Stacked)">
