@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── ENUMS ───────────────────────────────────────────────────────────────────
+
+enum ProductivityType {
+  DEVELOPER
+  DESIGNER
+  WRITER
+  STUDENT
+  MANAGER
+  OTHER
+}
+
+enum DistractionLimitMode {
+  TIME_BASED
+  GOAL_BASED
+}
+
+enum EnforcementLevel {
+  WARN_ONLY
+  BLUR
+  BLOCK
+  SHAME_AND_BLOCK
+}
+
+enum SiteCategory {
+  PRODUCTIVE
+  DISTRACTION
+  NEUTRAL
+}
+
+enum SiteSubcategory {
+  CODING
+  DOCUMENTATION
+  RESEARCH
+  WRITING
+  DESIGN
+  LEARNING
+  SOCIAL_MEDIA
+  VIDEO_ENTERTAINMENT
+  NEWS
+  SHOPPING
+  GAMING
+  COMMUNICATION
+  PRODUCTIVITY_TOOL
+  OTHER
+}
+
+enum DuckMood {
+  HAPPY
+  IDLE
+  SLEEPY
+  WATCHING
+  WARNING
+  ANGRY
+  CHAOS
+  PROUD
+  DISAPPOINTED
+}
+
+enum PlantType {
+  SMALL_FLOWER
+  MEDIUM_FLOWER
+  SMALL_TREE
+  LARGE_TREE
+  GOLDEN_PLANT
+}
+
+enum PlantStatus {
+  ALIVE
+  DEAD
+}
+
+// ─── NEXTAUTH MODELS ─────────────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── USER ────────────────────────────────────────────────────────────────────
+
+model User {
+  id                  String    @id @default(cuid())
+  googleId            String?   @unique
+  email               String    @unique
+  emailVerified       DateTime?
+  name                String?
+  image               String?
+  onboardingCompleted Boolean   @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  onboardingProfile   OnboardingProfile?
+  settings            UserSettings?
+  activityLogs        ActivityLog[]
+  dailySummaries      DailySummary[]
+  garden              Garden?
+  websiteOverrides    UserWebsiteOverride[]
+
+  @@index([email])
+}
+
+// ─── ONBOARDING ──────────────────────────────────────────────────────────────
+
+model OnboardingProfile {
+  id                      String               @id @default(cuid())
+  userId                  String               @unique
+  user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productivityType        ProductivityType     @default(OTHER)
+  distractionTypes        String[]
+  strictnessLevel         Int                  @default(3)
+  dailyFocusGoalMinutes   Int                  @default(240)
+  workStartTime           String               @default("09:00")
+  workEndTime             String               @default("18:00")
+  distractionLimitMode    DistractionLimitMode @default(TIME_BASED)
+  distractionLimitMinutes Int                  @default(60)
+  alwaysBlockedDomains    String[]             @default([])
+  alwaysProductiveDomains String[]             @default([])
+  enforcementLevel        EnforcementLevel     @default(BLUR)
+
+  completedAt             DateTime             @default(now())
+}
+
+// ─── USER SETTINGS ───────────────────────────────────────────────────────────
+
+model UserSettings {
+  id                      String               @id @default(cuid())
+  userId                  String               @unique
+  user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  distractionLimitMode    DistractionLimitMode @default(TIME_BASED)
+  distractionLimitMinutes Int                  @default(60)
+  dailyFocusGoalMinutes   Int                  @default(240)
+  enforcementLevel        EnforcementLevel     @default(BLUR)
+  workStartTime           String               @default("09:00")
+  workEndTime             String               @default("18:00")
+
+  duckEnabled             Boolean              @default(true)
+  duckMessagesEnabled     Boolean              @default(true)
+  weeklyEmailEnabled      Boolean              @default(true)
+
+  updatedAt               DateTime             @updatedAt
+}
+
+// ─── ACTIVITY TRACKING ───────────────────────────────────────────────────────
+
+model ActivityLog {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  domain          String
+  pageTitle       String?         @db.Text
+  category        SiteCategory    @default(NEUTRAL)
+  subcategory     SiteSubcategory @default(OTHER)
+  isProductive    Boolean         @default(false)
+
+  startedAt       DateTime
+  endedAt         DateTime
+  durationSeconds Int
+
+  date            DateTime
+
+  createdAt       DateTime        @default(now())
+
+  @@index([userId, date])
+  @@index([userId, domain])
+  @@index([date])
+}
+
+// ─── DAILY SUMMARY ───────────────────────────────────────────────────────────
+
+model DailySummary {
+  id                      String   @id @default(cuid())
+  userId                  String
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date                    DateTime
+
+  totalFocusMinutes       Int      @default(0)
+  totalDistractionMinutes Int      @default(0)
+  totalNeutralMinutes     Int      @default(0)
+
+  distractionLimitMinutes Int      @default(60)
+  limitReached            Boolean  @default(false)
+  productiveDayComplete   Boolean  @default(false)
+
+  productivityScore       Int      @default(0)
+  plantsGrown             Int      @default(0)
+  plantsLost              Int      @default(0)
+  focusStreak             Int      @default(0)
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+// ─── WEBSITE CLASSIFICATION ──────────────────────────────────────────────────
+
+model WebsiteClassification {
+  id           String          @id @default(cuid())
+  domain       String          @unique
+  category     SiteCategory    @default(NEUTRAL)
+  subcategory  SiteSubcategory @default(OTHER)
+  confidence   Float           @default(1.0)
+  aiClassified Boolean         @default(false)
+  classifiedAt DateTime        @default(now())
+  expiresAt    DateTime
+
+  @@index([domain])
+  @@index([expiresAt])
+}
+
+model UserWebsiteOverride {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain    String
+  category  SiteCategory
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, domain])
+  @@index([userId])
+}
+
+// ─── GARDEN ──────────────────────────────────────────────────────────────────
+
+model Garden {
+  id          String        @id @default(cuid())
+  userId      String        @unique
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  totalPlants Int           @default(0)
+  alivePlants Int           @default(0)
+  updatedAt   DateTime      @updatedAt
+
+  plants      GardenPlant[]
+}
+
+model GardenPlant {
+  id         String      @id @default(cuid())
+  gardenId   String
+  garden     Garden      @relation(fields: [gardenId], references: [id], onDelete: Cascade)
+
+  plantType  PlantType
+  status     PlantStatus @default(ALIVE)
+
+  positionX  Int
+  positionY  Int
+
+  spawnedAt  DateTime    @default(now())
+  diedAt     DateTime?
+
+  sourceDate DateTime
+
+  @@index([gardenId, status])
+}

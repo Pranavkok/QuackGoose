@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="100%" stop-color="#ecfccb"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="760" rx="32" fill="url(#bg)"/>
+  <rect x="38" y="38" width="1124" height="684" rx="24" fill="url(#card)" stroke="#e2e8f0" stroke-width="2"/>
+
+  <rect x="86" y="90" width="300" height="180" rx="18" fill="#eff6ff" stroke="#dbeafe"/>
+  <text x="106" y="126" fill="#1e3a8a" font-size="22" font-family="Arial, sans-serif" font-weight="700">Focus Ring</text>
+  <circle cx="236" cy="187" r="58" stroke="#bfdbfe" stroke-width="16"/>
+  <path d="M236 129 A58 58 0 1 1 183 218" stroke="#2563eb" stroke-width="16" stroke-linecap="round"/>
+  <text x="214" y="196" fill="#0f172a" font-size="28" font-family="Arial, sans-serif" font-weight="700">74%</text>
+
+  <rect x="410" y="90" width="676" height="180" rx="18" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="438" y="126" fill="#334155" font-size="22" font-family="Arial, sans-serif" font-weight="700">Today</text>
+  <rect x="438" y="150" width="140" height="88" rx="12" fill="#dcfce7"/>
+  <rect x="594" y="150" width="140" height="88" rx="12" fill="#fee2e2"/>
+  <rect x="750" y="150" width="140" height="88" rx="12" fill="#fef3c7"/>
+  <rect x="906" y="150" width="140" height="88" rx="12" fill="#dbeafe"/>
+
+  <rect x="86" y="292" width="512" height="378" rx="18" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="114" y="330" fill="#334155" font-size="22" font-family="Arial, sans-serif" font-weight="700">Top Sites</text>
+  <rect x="114" y="350" width="456" height="1" fill="#e2e8f0"/>
+  <rect x="114" y="372" width="456" height="40" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="114" y="422" width="456" height="40" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="114" y="472" width="456" height="40" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="114" y="522" width="456" height="40" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+  <rect x="114" y="572" width="456" height="40" rx="10" fill="#ffffff" stroke="#e2e8f0"/>
+
+  <rect x="616" y="292" width="470" height="180" rx="18" fill="#ecfccb" stroke="#bef264"/>
+  <text x="644" y="330" fill="#365314" font-size="22" font-family="Arial, sans-serif" font-weight="700">Garden Preview</text>
+  <circle cx="694" cy="396" r="16" fill="#22c55e"/>
+  <circle cx="740" cy="408" r="14" fill="#16a34a"/>
+  <circle cx="782" cy="392" r="12" fill="#4ade80"/>
+  <circle cx="824" cy="404" r="15" fill="#15803d"/>
+  <circle cx="866" cy="390" r="10" fill="#84cc16"/>
+
+  <rect x="616" y="490" width="470" height="180" rx="18" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="644" y="528" fill="#1e3a8a" font-size="22" font-family="Arial, sans-serif" font-weight="700">Duck Mood</text>
+  <text x="644" y="592" fill="#0f172a" font-size="54" font-family="Arial, sans-serif">🦆</text>
+  <text x="716" y="590" fill="#334155" font-size="24" font-family="Arial, sans-serif" font-weight="700">WATCHING</text>
+</svg>

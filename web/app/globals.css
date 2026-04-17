@@ -1,0 +1,137 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+.qf-skeleton {
+  border-radius: 0.75rem;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 240% 100%;
+  animation: qf-shimmer 1.2s ease-in-out infinite;
+}
+
+.qf-step-enter {
+  animation: qf-step-fade 280ms ease both;
+}
+
+.qf-garden-sun {
+  animation: qf-sun-drift 5.5s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.qf-garden-plant {
+  animation: qf-plant-sway 3.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.qf-garden-plant:nth-of-type(3n) {
+  animation-duration: 4.6s;
+}
+
+.qf-garden-plant:nth-of-type(4n) {
+  animation-duration: 3.1s;
+}
+
+@keyframes qf-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes qf-step-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes qf-sun-drift {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+@keyframes qf-plant-sway {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
+  }
+}
+
+html.qf-dark body {
+  --background: #0b1220;
+  --foreground: #e5e7eb;
+}
+
+html.qf-dark .bg-gray-50 {
+  background-color: #0b1220 !important;
+}
+
+html.qf-dark .bg-white {
+  background-color: #111827 !important;
+}
+
+html.qf-dark .bg-gray-100,
+html.qf-dark .bg-gray-50 {
+  border-color: #27324a !important;
+}
+
+html.qf-dark .text-gray-900 {
+  color: #f3f4f6 !important;
+}
+
+html.qf-dark .text-gray-800 {
+  color: #e5e7eb !important;
+}
+
+html.qf-dark .text-gray-700,
+html.qf-dark .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+html.qf-dark .text-gray-500,
+html.qf-dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+html.qf-dark .border-gray-100,
+html.qf-dark .border-gray-200,
+html.qf-dark .border-gray-50 {
+  border-color: #243148 !important;
+}
+
+html.qf-dark .hover\:bg-gray-50:hover {
+  background-color: #1f2937 !important;
+}
+
+html.qf-dark .qf-skeleton {
+  background: linear-gradient(90deg, #1f2937 25%, #243244 50%, #1f2937 75%);
+  background-size: 240% 100%;
+}
