@@ -1,0 +1,74 @@
+#__quackfocus_block__ .qf-block-content {
+  background: white;
+  padding: 40px;
+  border-radius: 20px;
+  text-align: center;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+#__quackfocus_block__ .qf-block-content img {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+}
+
+#__quackfocus_block__ .qf-block-content h1 {
+  font-size: 28px;
+  margin: 20px 0;
+  font-family: system-ui, sans-serif;
+}
+
+#__quackfocus_block__ #qf-back-to-work {
+  background: black;
+  color: white;
+  padding: 12px 24px;
+  font-size: 16px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#__quackfocus_duck__ {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 80px;
+  height: 80px;
+  z-index: 2147483647;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+#__quackfocus_duck__:hover {
+  transform: scale(1.1);
+}
+
+#qf-duck-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+#qf-duck-tooltip {
+  position: absolute;
+  bottom: 90px;
+  right: 0;
+  background: black;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+  max-width: 200px;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+}
+
+#qf-duck-tooltip.qf-show {
+  opacity: 1;
+  transform: translateY(0);
+}

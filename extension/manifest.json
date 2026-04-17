@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "QuackFocus",
+  "version": "1.0.0",
+  "description": "Your focus, enforced by a duck.",
+  "permissions": [
+    "tabs",
+    "webNavigation",
+    "storage",
+    "alarms",
+    "scripting",
+    "identity"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "QuackFocus",
+    "default_icon": {
+      "16": "duck-assets/idle.PNG",
+      "48": "duck-assets/idle.PNG",
+      "128": "duck-assets/idle.PNG"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "duck-assets/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "oauth2": {
+    "client_id": "354324302985-9d37aq9t37mdb4kqickgfru1t7g6orpn.apps.googleusercontent.com",
+    "scopes": [
+      "openid",
+      "email",
+      "profile"
+    ]
+  }
+}
