@@ -4,14 +4,14 @@ const WEB_BASE = 'http://localhost:3000';
 
 const DUCK_ASSETS = {
   HAPPY: 'duck-assets/happy.png',
-  IDLE: 'duck-assets/idle.PNG',
-  SLEEPY: 'duck-assets/sleeping.PNG',
-  WATCHING: 'duck-assets/watching.PNG',
-  WARNING: 'duck-assets/warning.PNG',
-  ANGRY: 'duck-assets/angry.PNG',
-  CHAOS: 'duck-assets/chaos.PNG',
-  PROUD: 'duck-assets/proud.PNG',
-  DISAPPOINTED: 'duck-assets/dissapointed.PNG',
+  IDLE: 'duck-assets/idle.png',
+  SLEEPY: 'duck-assets/sleeping.png',
+  WATCHING: 'duck-assets/watching.png',
+  WARNING: 'duck-assets/warning.png',
+  ANGRY: 'duck-assets/angry.png',
+  CHAOS: 'duck-assets/chaos.png',
+  PROUD: 'duck-assets/proud.png',
+  DISAPPOINTED: 'duck-assets/dissapointed.png',
 };
 
 function escapeHtml(value) {
@@ -180,7 +180,7 @@ async function render() {
       </div>
 
       <div class="user">
-        <img class="avatar" src="${escapeHtml(user.image || 'duck-assets/idle.PNG')}" alt="avatar" />
+        <img class="avatar" src="${escapeHtml(user.image || 'duck-assets/idle.png')}" alt="avatar" />
         <div class="stack" style="gap:2px">
           <p class="name">${escapeHtml(user.name || 'Focus Goose')}</p>
           <p class="muted">${paused ? `Paused: ${formatRemaining(remainingMs)} left` : 'Tracking active'}</p>

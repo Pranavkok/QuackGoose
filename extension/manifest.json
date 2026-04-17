@@ -37,9 +37,9 @@
     "default_popup": "popup.html",
     "default_title": "QuackFocus",
     "default_icon": {
-      "16": "duck-assets/idle.PNG",
-      "48": "duck-assets/idle.PNG",
-      "128": "duck-assets/idle.PNG"
+      "16": "duck-assets/idle.png",
+      "48": "duck-assets/idle.png",
+      "128": "duck-assets/idle.png"
     }
   },
   "web_accessible_resources": [

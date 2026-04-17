@@ -30,6 +30,18 @@ type DashboardResponse = {
     category: 'PRODUCTIVE' | 'DISTRACTION' | 'NEUTRAL';
     minutes: number;
   }>;
+  peakProductiveWindow: {
+    label: string;
+    startHour: number;
+    endHour: number;
+    productiveMinutes: number;
+    trackedMinutes: number;
+    productivityPercent: number;
+    sampleSessions: number;
+    activeDays: number;
+    lookbackDays: number;
+    timezone: string;
+  } | null;
   streak: number;
   duckMood: string;
   user?: {
@@ -47,7 +59,9 @@ export default function DashboardPage() {
 
   async function loadSummary() {
     try {
-      const res = await fetch('/api/dashboard/summary', { cache: 'no-store' });
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const params = new URLSearchParams({ tz: timezone });
+      const res = await fetch(`/api/dashboard/summary?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error(`Failed to load (${res.status})`);
 
       const json = (await res.json()) as DashboardResponse;
@@ -83,6 +97,7 @@ export default function DashboardPage() {
   const score = data?.summary?.productivityScore ?? 0;
   const streak = data?.streak ?? 0;
   const duckMood = data?.duckMood || 'IDLE';
+  const peakProductiveWindow = data?.peakProductiveWindow ?? null;
 
   const focusPercent = Math.min(Math.round((focusMinutes / Math.max(goalMinutes, 1)) * 100), 100);
   const distractionPercent = Math.min(
@@ -122,8 +137,9 @@ export default function DashboardPage() {
             <Skeleton className="h-32 w-full" />
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
           <Skeleton className="h-40 w-full lg:col-span-2" />
+          <Skeleton className="h-40 w-full" />
           <Skeleton className="h-40 w-full" />
         </div>
         <Skeleton className="h-64 w-full" />
@@ -226,7 +242,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <div className={`${cardClass} lg:col-span-2`}>
           <h2 className="text-lg font-semibold text-gray-900">Distraction Budget</h2>
           <p className="mt-1 text-sm text-gray-500">
@@ -256,6 +272,28 @@ export default function DashboardPage() {
           <p className="mt-2 text-3xl">{duckMoodEmoji(duckMood)}</p>
           <p className="mt-2 font-semibold text-gray-800">{duckMood}</p>
           <p className="mt-1 text-sm text-gray-500">{duckMoodMessage(duckMood)}</p>
+        </div>
+
+        <div className={cardClass}>
+          <h2 className="text-lg font-semibold text-gray-900">Peak Productivity Time</h2>
+          {peakProductiveWindow ? (
+            <>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{peakProductiveWindow.label}</p>
+              <p className="mt-1 text-sm text-gray-600">
+                {formatMinutes(peakProductiveWindow.productiveMinutes)} productive · {peakProductiveWindow.productivityPercent}% productive rate
+              </p>
+              <p className="mt-1 text-xs text-gray-500">
+                Last {peakProductiveWindow.lookbackDays} days, {peakProductiveWindow.activeDays} active day{peakProductiveWindow.activeDays === 1 ? '' : 's'} · {peakProductiveWindow.timezone}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-2 text-sm text-gray-500">Not enough productive activity yet.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Keep browsing with the extension enabled to unlock this insight.
+              </p>
+            </>
+          )}
         </div>
       </div>
 

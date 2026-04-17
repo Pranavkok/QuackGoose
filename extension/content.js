@@ -9,18 +9,26 @@ let enforcementActive = false;
 let enforcementOverlay = null;
 let duckElement = null;
 let currentMood = 'IDLE';
+let tooltipHideTimer = null;
+let companionInterval = null;
+let lastGuidanceAt = 0;
+let lastGuidanceKey = '';
+
+const TOOLTIP_AUTO_HIDE_MS = 5000;
+const COMPANION_PING_MS = 120000;
+const MIN_GUIDANCE_GAP_MS = 12000;
 
 function getDuckAssetFilename(mood) {
   const assets = {
     HAPPY: 'duck-assets/happy.png',
-    IDLE: 'duck-assets/idle.PNG',
-    SLEEPY: 'duck-assets/sleeping.PNG',
-    WATCHING: 'duck-assets/watching.PNG',
-    WARNING: 'duck-assets/warning.PNG',
-    ANGRY: 'duck-assets/angry.PNG',
-    CHAOS: 'duck-assets/chaos.PNG',
-    PROUD: 'duck-assets/proud.PNG',
-    DISAPPOINTED: 'duck-assets/dissapointed.PNG',
+    IDLE: 'duck-assets/idle.png',
+    SLEEPY: 'duck-assets/sleeping.png',
+    WATCHING: 'duck-assets/watching.png',
+    WARNING: 'duck-assets/warning.png',
+    ANGRY: 'duck-assets/angry.png',
+    CHAOS: 'duck-assets/chaos.png',
+    PROUD: 'duck-assets/proud.png',
+    DISAPPOINTED: 'duck-assets/dissapointed.png',
   };
 
   return assets[String(mood || 'IDLE').toUpperCase()] || assets.IDLE;
@@ -135,6 +143,78 @@ function getDuckMessage(mood) {
   return messages[mood] || '';
 }
 
+function getCompanionMessage(reason) {
+  const status = pageState.status || {};
+  const category = pageState.classification?.category;
+
+  if (status.outsideActiveTimeWindow) {
+    return 'Outside work hours. I am still here with you.';
+  }
+
+  if (status.isPaused) {
+    return 'Pause is active. I will guide you again once it ends.';
+  }
+
+  if (reason === 'classified') {
+    if (category === 'DISTRACTION') return 'Distraction site detected. Let us get back on track.';
+    if (category === 'PRODUCTIVE') return 'Great choice. This is a productive page.';
+    if (category === 'NEUTRAL') return 'Neutral page. Keep your intent clear.';
+  }
+
+  if (currentMood === 'HAPPY') return 'Strong focus. Keep this momentum.';
+  if (currentMood === 'PROUD') return 'Goal completed. You earned this win.';
+  if (currentMood === 'WARNING') return 'You are drifting. Shift to a productive tab.';
+  if (currentMood === 'ANGRY') return 'Distraction is too high. Time to correct course.';
+  if (currentMood === 'CHAOS') return 'Limit reached. Back to work mode now.';
+  if (currentMood === 'WATCHING') return 'I am here. Let us stay intentional.';
+  if (currentMood === 'IDLE') return "I'm here with you. Let's focus.";
+
+  return getDuckMessage(currentMood);
+}
+
+function showDuckTooltip(message, durationMs = TOOLTIP_AUTO_HIDE_MS) {
+  if (!message) return;
+  if (!duckElement) injectDuck();
+
+  const tip = document.getElementById('qf-duck-tooltip');
+  if (!tip) return;
+
+  tip.textContent = message;
+  tip.classList.add('qf-show');
+  if (tooltipHideTimer) clearTimeout(tooltipHideTimer);
+  tooltipHideTimer = setTimeout(() => tip.classList.remove('qf-show'), durationMs);
+}
+
+function maybeSpeak(reason, force = false) {
+  const message = getCompanionMessage(reason);
+  if (!message) return;
+
+  const key = [
+    reason,
+    currentMood,
+    pageState.classification?.category || 'NONE',
+    pageState.status?.isPaused ? 'PAUSED' : 'RUNNING',
+    pageState.status?.outsideActiveTimeWindow ? 'OFF_HOURS' : 'ACTIVE_HOURS',
+  ].join('|');
+
+  const now = Date.now();
+  if (!force && now - lastGuidanceAt < MIN_GUIDANCE_GAP_MS) return;
+  if (!force && key === lastGuidanceKey && now - lastGuidanceAt < COMPANION_PING_MS) return;
+
+  lastGuidanceAt = now;
+  lastGuidanceKey = key;
+  showDuckTooltip(message);
+}
+
+function startCompanionGuidance() {
+  if (companionInterval) return;
+
+  companionInterval = setInterval(() => {
+    if (document.visibilityState !== 'visible') return;
+    maybeSpeak('interval');
+  }, COMPANION_PING_MS);
+}
+
 function injectDuck() {
   if (duckElement) return;
 
@@ -148,16 +228,15 @@ function injectDuck() {
   document.documentElement.appendChild(duckElement);
 
   duckElement.addEventListener('click', () => {
-    const tip = document.getElementById('qf-duck-tooltip');
-    if (!tip) return;
-
-    tip.classList.toggle('qf-show');
-    tip.textContent = getDuckMessage(currentMood);
-    setTimeout(() => tip.classList.remove('qf-show'), 5000);
+    showDuckTooltip(getCompanionMessage('click'));
   });
+
+  startCompanionGuidance();
+  maybeSpeak('loaded', true);
 }
 
 function updateDuckMood(mood) {
+  const prevMood = currentMood;
   const normalizedMood = String(mood || 'IDLE').toUpperCase();
   currentMood = normalizedMood;
 
@@ -166,6 +245,10 @@ function updateDuckMood(mood) {
   const img = document.getElementById('qf-duck-img');
   if (img) {
     img.src = chrome.runtime.getURL(getDuckAssetFilename(normalizedMood));
+  }
+
+  if (normalizedMood !== prevMood) {
+    maybeSpeak('mood_change');
   }
 }
 
@@ -256,6 +339,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     } else {
       updateDuckMood(category === 'DISTRACTION' ? 'WARNING' : 'WATCHING');
     }
+    maybeSpeak('classified');
     window.dispatchEvent(new CustomEvent('qf:page_classified', { detail: pageState.classification }));
     return;
   }
@@ -266,6 +350,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     if (msg.payload?.duckMood) {
       updateDuckMood(msg.payload.duckMood);
     }
+    maybeSpeak('status_update');
     window.dispatchEvent(new CustomEvent('qf:state_update', { detail: pageState.status }));
     return;
   }
