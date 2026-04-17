@@ -25,7 +25,13 @@ export async function POST(req: Request) {
     return corsResponse({ error: 'Missing EXTENSION_JWT_SECRET' }, 500);
   }
 
-  const { googleAccessToken } = (await req.json()) as { googleAccessToken?: string };
+  let googleAccessToken: string | undefined;
+  try {
+    const body = await req.json();
+    googleAccessToken = body?.googleAccessToken;
+  } catch {
+    return corsResponse({ error: 'Missing token' }, 400);
+  }
   if (!googleAccessToken) return corsResponse({ error: 'Missing token' }, 400);
 
   const userinfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {

@@ -10,18 +10,19 @@ function applyTheme(theme: 'light' | 'dark') {
 }
 
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'light';
-    const stored = window.localStorage.getItem(KEY);
-    if (stored === 'dark' || stored === 'light') {
-      return stored;
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    const stored = window.localStorage.getItem(KEY);
+    const resolved: 'light' | 'dark' =
+      stored === 'dark' || stored === 'light'
+        ? stored
+        : window.matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light';
+    setTheme(resolved);
+    applyTheme(resolved);
+  }, []);
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark';
