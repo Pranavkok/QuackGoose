@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { signOut } from '@/lib/auth';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 const orgNavLinks = [
   { href: '/org/dashboard', label: 'Overview', icon: '📊' },
@@ -40,24 +41,24 @@ export default async function OrgLayout({ children }: { children: React.ReactNod
   const org = membership.org;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="qf-admin-theme flex min-h-screen flex-col bg-gray-50">
       {/* Top nav */}
-      <nav className="sticky top-0 z-40 border-b border-gray-200 bg-white/90 shadow-sm backdrop-blur-md">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-8">
+      <nav className="qf-admin-header sticky top-0 z-40 border-b shadow-sm backdrop-blur-md">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
+          <div className="flex min-w-0 items-center gap-4">
             <Link href="/org/dashboard" className="flex items-center gap-2">
               <span className="text-xl">🏢</span>
               <div>
-                <p className="text-sm font-bold leading-tight text-gray-900">{org.name}</p>
-                <p className="text-xs text-gray-400 leading-tight">Admin Panel</p>
+                <p className="qf-admin-brand text-sm font-bold leading-tight">{org.name}</p>
+                <p className="qf-admin-subtitle text-xs leading-tight">Admin Panel</p>
               </div>
             </Link>
-            <div className="hidden items-center gap-1 md:flex">
+            <div className="hidden min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap md:flex">
               {orgNavLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                  className="qf-admin-navlink flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
                 >
                   <span className="text-base">{link.icon}</span>
                   {link.label}
@@ -68,12 +69,14 @@ export default async function OrgLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-3">
             {org.subscription && (
-              <div className="hidden rounded-full border border-blue-100 bg-blue-50 px-3 py-1 md:block">
-                <span className="text-xs font-semibold text-blue-700">
+              <div className="qf-admin-planpill hidden rounded-full border px-3 py-1 md:block">
+                <span className="text-xs font-semibold">
                   {org.subscription.plan} · {org.subscription.seatsUsed}/{org.subscription.seatsAllowed} seats
                 </span>
               </div>
             )}
+            <ThemeToggle className="qf-admin-theme-toggle" />
+            <div className="qf-admin-divider hidden h-5 w-px sm:block" />
             <div className="flex items-center gap-2.5">
               {user?.image ? (
                 <Image
@@ -88,7 +91,7 @@ export default async function OrgLayout({ children }: { children: React.ReactNod
                   {user?.name?.charAt(0) ?? '?'}
                 </div>
               )}
-              <span className="hidden text-sm font-medium text-gray-700 md:block">{user?.name}</span>
+              <span className="qf-admin-user hidden text-sm font-medium md:block">{user?.name}</span>
             </div>
             <form
               action={async () => {
@@ -98,7 +101,7 @@ export default async function OrgLayout({ children }: { children: React.ReactNod
             >
               <button
                 type="submit"
-                className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:border-gray-300 hover:text-gray-700"
+                className="qf-admin-signout rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
               >
                 Sign out
               </button>
@@ -107,7 +110,14 @@ export default async function OrgLayout({ children }: { children: React.ReactNod
         </div>
       </nav>
 
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+
+      <footer className="qf-admin-footer border-t">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 px-4 py-4 text-xs sm:flex-row sm:px-6 lg:px-8">
+          <p>QuackFocus admin workspace</p>
+          <p>Policy-first focus operations.</p>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -28,6 +28,14 @@ type GardenResponse = {
   plants: GardenPlant[];
 };
 
+const PLANT_META: Record<PlantType, { label: string; icon: string }> = {
+  SMALL_FLOWER: { label: 'Small Flower', icon: '🌼' },
+  MEDIUM_FLOWER: { label: 'Medium Flower', icon: '🌸' },
+  SMALL_TREE: { label: 'Small Tree', icon: '🌱' },
+  LARGE_TREE: { label: 'Large Tree', icon: '🌳' },
+  GOLDEN_PLANT: { label: 'Golden Plant', icon: '✨' },
+};
+
 function hashOffset(seed: string, spread: number) {
   let total = 0;
   for (let i = 0; i < seed.length; i++) total += seed.charCodeAt(i);
@@ -95,6 +103,29 @@ export default function GardenPage() {
     });
   }, [data]);
 
+  const recentPlants = useMemo(
+    () =>
+      [...(data?.plants ?? [])]
+        .sort((a, b) => new Date(b.spawnedAt).getTime() - new Date(a.spawnedAt).getTime())
+        .slice(0, 5),
+    [data],
+  );
+
+  const aliveByType = useMemo(() => {
+    const counts: Record<PlantType, number> = {
+      SMALL_FLOWER: 0,
+      MEDIUM_FLOWER: 0,
+      SMALL_TREE: 0,
+      LARGE_TREE: 0,
+      GOLDEN_PLANT: 0,
+    };
+
+    for (const plant of data?.plants ?? []) {
+      if (plant.status === 'ALIVE') counts[plant.plantType] += 1;
+    }
+    return counts;
+  }, [data]);
+
   if (loading && !data) {
     return (
       <div className="space-y-5">
@@ -112,7 +143,7 @@ export default function GardenPage() {
     return (
       <div className="flex flex-col items-center py-24 text-center">
         <div className="text-5xl">🌧️</div>
-        <p className="mt-4 font-semibold text-gray-900">Couldn't load your garden</p>
+        <p className="mt-4 font-semibold text-gray-900">Couldn&apos;t load your garden</p>
         <p className="mt-1 text-sm text-gray-500">{error}</p>
         <button onClick={() => void load()} className="mt-5 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-bold text-white hover:bg-gray-700 transition-colors">
           Retry
@@ -124,22 +155,37 @@ export default function GardenPage() {
   const healthPercent = data && data.totalPlants > 0
     ? Math.round((data.alivePlants / data.totalPlants) * 100)
     : 0;
+  const deadPlants = Math.max(0, (data?.totalPlants ?? 0) - (data?.alivePlants ?? 0));
+  const lastUpdated = data?.updatedAt
+    ? new Date(data.updatedAt).toLocaleString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : 'just now';
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Your Focus Garden 🌱</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Plants grow when you focus. Distractions can harm them.</p>
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-emerald-200/80 bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 p-6 shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Employee Garden</p>
+            <h1 className="mt-1 text-2xl font-black text-gray-900">Your Focus Garden 🌱</h1>
+            <p className="mt-1 text-sm text-gray-600">
+              Plants grow when you focus. Distractions can harm them.
+            </p>
+            <p className="mt-1 text-xs text-emerald-800/70">Last synced: {lastUpdated}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard" className="rounded-xl border border-emerald-200 bg-white/90 px-4 py-2 text-sm font-semibold text-emerald-800 shadow-sm transition-colors hover:bg-white">
+              ← Dashboard
+            </Link>
+            <button onClick={() => void load()} className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-800">
+              Refresh
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard" className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 transition-colors">
-            ← Dashboard
-          </Link>
-          <button onClick={() => void load()} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm hover:bg-gray-50 transition-colors">
-            Refresh
-          </button>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <MiniStat label="Alive" value={String(data?.alivePlants ?? 0)} />
+          <MiniStat label="Total" value={String(data?.totalPlants ?? 0)} />
+          <MiniStat label="This Week" value={String(data?.plantsThisWeek ?? 0)} />
+          <MiniStat label="Health" value={`${healthPercent}%`} />
         </div>
       </div>
 
@@ -202,7 +248,7 @@ export default function GardenPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
         <StatCard
           icon="🌱"
           label="Alive Plants"
@@ -224,11 +270,81 @@ export default function GardenPage() {
           sub="Alive / total ratio"
           color={healthPercent >= 70 ? 'green' : healthPercent >= 40 ? 'amber' : 'red'}
         />
+        <StatCard
+          icon="🪵"
+          label="Lost Plants"
+          value={String(deadPlants)}
+          sub="Need focus to recover"
+          color={deadPlants > 0 ? 'red' : 'green'}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900">Plant Breakdown</h2>
+          <p className="mt-1 text-sm text-gray-500">Alive plants by type</p>
+          <div className="mt-4 space-y-3">
+            {(Object.keys(PLANT_META) as PlantType[]).map((type) => {
+              const count = aliveByType[type];
+              const totalAlive = Math.max(1, data?.alivePlants ?? 0);
+              const width = Math.round((count / totalAlive) * 100);
+              return (
+                <div key={type}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <p className="font-medium text-gray-700">{PLANT_META[type].icon} {PLANT_META[type].label}</p>
+                    <p className="font-bold text-gray-900">{count}</p>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900">Recent Growth Activity</h2>
+          <p className="mt-1 text-sm text-gray-500">Latest plants added to your garden</p>
+          <div className="mt-4 space-y-2">
+            {recentPlants.length === 0 && (
+              <p className="rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-500">
+                No growth activity yet. Complete focused sessions to start growing.
+              </p>
+            )}
+            {recentPlants.map((plant) => (
+              <div key={plant.id} className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {PLANT_META[plant.plantType].icon} {PLANT_META[plant.plantType].label}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {new Date(plant.spawnedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                  </p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  plant.status === 'ALIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                }`}>
+                  {plant.status === 'ALIVE' ? 'Alive' : 'Lost'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <p className="rounded-2xl border border-blue-50 bg-blue-50 px-5 py-3 text-sm text-blue-700">
         💡 Keep your focus sessions going to unlock <strong>Golden Plants</strong> — rare and only grown by streak days.
       </p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-emerald-200 bg-white/80 px-3 py-2 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">{label}</p>
+      <p className="mt-0.5 text-xl font-black text-emerald-900">{value}</p>
     </div>
   );
 }
